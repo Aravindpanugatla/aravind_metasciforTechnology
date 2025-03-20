@@ -22,4 +22,4 @@ if st.button("Calculate BMI", use_container_width=True):
     else:
         st.error(" Obese")
 
-st.image(r"C:\Users\aravind\OneDrive\Desktop\streamlit\stlapp\space.jpg", caption=" BMI Classification Chart", use_container_width=True)
+st.image("space.jpg", caption=" BMI Classification Chart", use_container_width=True)
