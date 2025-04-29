@@ -3,9 +3,9 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from collections import defaultdict
-from docx import Document
+import csv
 
-#Scraper Functions
+# Scraper Functions
 
 visited = set()
 site_map = defaultdict(list)
@@ -39,9 +39,9 @@ def scrape_site(url):
 
             site_map[current_url] = links
             content_data[current_url] = {
-                "headings": headings[:5],
-                "paragraphs": paragraphs[:5],
-                "links": links
+                "headings": headings[:3],
+                "paragraphs": paragraphs[:3],
+                "links": links[:3]
             }
 
             for link in links:
@@ -54,47 +54,42 @@ def scrape_site(url):
     crawl(url)
     return content_data
 
-def generate_report(content_data, filename="webscraper_Report.docx"):
-    doc = Document()
-    doc.add_heading(' Webscraping Report', 0)
-    for url, data in content_data.items():
-        doc.add_heading(f"URL: {url}", level=1)
+def generate_csv_report(content_data, filename="webscraper_report.csv"):
+    with open(filename, mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        header = ['URL', 'Heading 1', 'Heading 2', 'Heading 3',
+                  'Paragraph 1', 'Paragraph 2', 'Paragraph 3',
+                  'Link 1', 'Link 2', 'Link 3']
+        writer.writerow(header)
 
-        doc.add_heading("Headings", level=2)
-        for h in data['headings']:
-            doc.add_paragraph(h)
-
-        doc.add_heading("Paragraphs", level=2)
-        for p in data['paragraphs']:
-            doc.add_paragraph(p)
-
-        doc.add_heading("Internal Links", level=2)
-        for l in data['links']:
-            doc.add_paragraph(l)
-
-    doc.save(filename)
+        for url, data in content_data.items():
+            row = [url]
+            row += data['headings'] + [''] * (3 - len(data['headings']))
+            row += data['paragraphs'] + [''] * (3 - len(data['paragraphs']))
+            row += data['links'] + [''] * (3 - len(data['links']))
+            writer.writerow(row)
     return filename
 
-#Streamlit UI
+# Streamlit UI
 
-st.set_page_config(page_title="SiteSketcher", layout="wide")
-st.title(" Website Scraper")
-st.markdown("Scrape any website (including subpages) and export a structured Word document report.")
+st.set_page_config(page_title="SiteSketcher CSV", layout="wide")
+st.title("🔍 Website Scraper (CSV Report)")
+st.markdown("Scrape a website and export the content as a **CSV file** (headings, paragraphs, links).")
 
 url = st.text_input("🔗 Enter Website URL", "https://example.com")
 
-if st.button(" Scrape and Generate Report"):
+if st.button("Scrape and Generate CSV Report"):
     with st.spinner("Scraping site... please wait"):
         data = scrape_site(url)
         if data:
-            filename = generate_report(data)
+            filename = generate_csv_report(data)
             with open(filename, "rb") as f:
-                st.success("Report generated successfully!")
+                st.success("CSV report generated successfully!")
                 st.download_button(
-                    label="Download Report (.docx)",
+                    label="📥 Download Report (.csv)",
                     data=f,
                     file_name=filename,
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    mime="text/csv"
                 )
         else:
-            st.warning(" No content could be extracted from this site.")
+            st.warning("No content could be extracted from this site.")
