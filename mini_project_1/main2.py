@@ -1,95 +1,59 @@
 import streamlit as st
-import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin, urlparse
-from collections import defaultdict
-import csv
+import pandas as pd
+import time
 
-# Scraper Functions
+def setup_driver():
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-sandbox")
+    driver = webdriver.Chrome(options=chrome_options)
+    return driver
 
-visited = set()
-site_map = defaultdict(list)
+def scrape_propertyonion():
+    url = "https://propertyonion.com/property_search"
+    driver = setup_driver()
+    driver.get(url)
 
-def clean_url(base, link):
-    try:
-        full_url = urljoin(base, link)
-        if urlparse(full_url).netloc == urlparse(base).netloc:
-            return full_url.split("#")[0]
-    except:
-        return None
+    time.sleep(10)  # Let the page load JavaScript
 
-def scrape_site(url):
-    visited.clear()
-    content_data = {}
+    soup = BeautifulSoup(driver.page_source, 'html.parser')
+    driver.quit()
 
-    def crawl(current_url):
-        if current_url in visited:
-            return
-        try:
-            res = requests.get(current_url, timeout=8)
-            if res.status_code != 200:
-                return
-            soup = BeautifulSoup(res.text, 'html.parser')
-            visited.add(current_url)
+    results = []
+    listings = soup.select('.search-results .card')  # Adjust based on actual HTML
 
-            headings = [h.get_text(strip=True) for h in soup.find_all(['h1', 'h2', 'h3'])]
-            paragraphs = [p.get_text(strip=True) for p in soup.find_all('p')]
-            links = [clean_url(current_url, a['href']) for a in soup.find_all('a', href=True)]
-            links = list(filter(None, links))
+    for card in listings:
+        title = card.select_one('.card-title')
+        address = card.select_one('.property-address')
+        price = card.select_one('.property-price')
 
-            site_map[current_url] = links
-            content_data[current_url] = {
-                "headings": headings[:3],
-                "paragraphs": paragraphs[:3],
-                "links": links[:3]
-            }
+        results.append({
+            'Title': title.get_text(strip=True) if title else '',
+            'Address': address.get_text(strip=True) if address else '',
+            'Price': price.get_text(strip=True) if price else '',
+        })
 
-            for link in links:
-                crawl(link)
+    return pd.DataFrame(results)
 
-        except Exception as e:
-            print(f"Error while scraping {current_url}: {e}")
-            pass
+st.title("📊 PropertyOnion Scraper (CSV Export)")
+st.write("Scrape property listings from propertyonion.com")
 
-    crawl(url)
-    return content_data
-
-def generate_csv_report(content_data, filename="webscraper_report.csv"):
-    with open(filename, mode='w', newline='', encoding='utf-8') as file:
-        writer = csv.writer(file)
-        header = ['URL', 'Heading 1', 'Heading 2', 'Heading 3',
-                  'Paragraph 1', 'Paragraph 2', 'Paragraph 3',
-                  'Link 1', 'Link 2', 'Link 3']
-        writer.writerow(header)
-
-        for url, data in content_data.items():
-            row = [url]
-            row += data['headings'] + [''] * (3 - len(data['headings']))
-            row += data['paragraphs'] + [''] * (3 - len(data['paragraphs']))
-            row += data['links'] + [''] * (3 - len(data['links']))
-            writer.writerow(row)
-    return filename
-
-# Streamlit UI
-
-st.set_page_config(page_title="SiteSketcher CSV", layout="wide")
-st.title("🔍 Website Scraper (CSV Report)")
-st.markdown("Scrape a website and export the content as a **CSV file** (headings, paragraphs, links).")
-
-url = st.text_input("🔗 Enter Website URL", "https://example.com")
-
-if st.button("Scrape and Generate CSV Report"):
-    with st.spinner("Scraping site... please wait"):
-        data = scrape_site(url)
-        if data:
-            filename = generate_csv_report(data)
-            with open(filename, "rb") as f:
-                st.success("CSV report generated successfully!")
-                st.download_button(
-                    label="📥 Download Report (.csv)",
-                    data=f,
-                    file_name=filename,
-                    mime="text/csv"
-                )
+if st.button("Scrape Now"):
+    with st.spinner("Scraping data from PropertyOnion..."):
+        df = scrape_propertyonion()
+        if not df.empty:
+            csv_file = "propertyonion_output.csv"
+            df.to_csv(csv_file, index=False)
+            st.success("Scraping completed successfully!")
+            st.download_button(
+                label="📥 Download CSV",
+                data=open(csv_file, "rb"),
+                file_name=csv_file,
+                mime="text/csv"
+            )
         else:
-            st.warning("No content could be extracted from this site.")
+            st.warning("No data found or failed to scrape.")
