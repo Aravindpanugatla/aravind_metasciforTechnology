@@ -2,3 +2,5 @@ streamlit
 selenium
 beautifulsoup4
 pandas
+requests
+python-docx
