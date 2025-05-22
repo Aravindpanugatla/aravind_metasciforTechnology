@@ -7,7 +7,7 @@ from pydub.playback import play
 import openai
 
 # Optional: Set your OpenAI API key here
-openai.api_key = "your-openai-api-key"  # Replace with your actual key
+openai.api_key = "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"  # Replace with your actual key
 
 # Function to convert speech to text
 def transcribe_audio():
@@ -45,18 +45,18 @@ def speak_text(text):
     play(audio)
 
 # Streamlit UI
-st.set_page_config(page_title="AI Voice Bot", page_icon="🗣️")
-st.title("🗣️ AI Voice Bot")
+st.set_page_config(page_title="AI Voice Bot", page_icon="🐰")
+st.title("AI Voice Bot")
 
 st.markdown("""
 Speak into your mic. The bot will understand you, generate a response using AI, and reply with speech.
 """)
 
-if st.button("🎤 Speak Now"):
+if st.button("Speak Now"):
     user_text = transcribe_audio()
     st.success(f"You said: {user_text}")
 
     response = generate_response(user_text)
-    st.info(f"🤖 Bot: {response}")
+    st.info(f"Bot: {response}")
 
     speak_text(response)
