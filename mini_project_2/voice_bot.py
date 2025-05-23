@@ -1,36 +1,39 @@
 import streamlit as st
-from openai import OpenAI
 from gtts import gTTS
-import tempfile
+import os
+from io import BytesIO
+from tempfile import NamedTemporaryFile
+from openai import OpenAI
+import base64
 
-# Initialize OpenAI client
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# Setup OpenAI client (optional)
+openai_api_key = st.secrets.get("OPENAI_API_KEY", None)
+if openai_api_key:
+    client = OpenAI(api_key=openai_api_key)
 
-st.set_page_config(page_title="AI Voice Bot 🎙️", layout="centered")
-st.title("🤖 AI Voice Bot")
-st.markdown("Type a message below and hear the AI respond.")
+st.title("🗣️ AI Voice Bot")
+user_input = st.text_input("Enter your message")
 
-user_input = st.text_input("You:", "")
-
-if st.button("Send") and user_input.strip() != "":
-    with st.spinner("AI is thinking..."):
-        try:
+if st.button("Talk"):
+    if user_input:
+        # Use OpenAI if API key is set
+        if openai_api_key:
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "user", "content": user_input}
-                ]
+                messages=[{"role": "user", "content": user_input}]
             )
             reply = response.choices[0].message.content
-            st.markdown("**AI:** " + reply)
+        else:
+            # Simple fallback response
+            reply = f"You said: {user_input}"
 
-            tts = gTTS(reply)
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as fp:
-                tts.save(fp.name)
-                st.audio(fp.name, format="audio/mp3")
+        st.markdown(f"**Bot:** {reply}")
 
-        except Exception as e:
-            if "rate limit" in str(e).lower():
-                st.error("⚠️ You are sending requests too quickly. Please wait a moment and try again.")
-            else:
-                st.error(f"An unexpected error occurred: {e}")
+        # Convert to speech
+        tts = gTTS(reply)
+        with NamedTemporaryFile(delete=True) as fp:
+            tts.save(fp.name)
+            audio_bytes = fp.read()
+            st.audio(fp.name, format='audio/mp3')
+    else:
+        st.warning("Please enter a message.")
