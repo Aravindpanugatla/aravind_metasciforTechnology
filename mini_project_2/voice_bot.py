@@ -11,10 +11,10 @@ openai_api_key = st.secrets.get("OPENAI_API_KEY", None)
 if openai_api_key:
     client = OpenAI(api_key=openai_api_key)
 
-st.title("🗣️ AI Voice Bot")
+st.title(" AI Voice Bot")
 user_input = st.text_input("Enter your message")
 
-if st.button("Talk"):
+if st.button("enter"):
     if user_input:
         # Use OpenAI if API key is set
         if openai_api_key:
