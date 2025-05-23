@@ -1,8 +1,8 @@
 import streamlit as st
 from openai import OpenAI
+from openai.error import RateLimitError
 from gtts import gTTS
 import tempfile
-import openai.error
 
 # Initialize OpenAI client with API key from Streamlit secrets
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -31,7 +31,7 @@ if st.button("Send") and user_input.strip() != "":
                 tts.save(fp.name)
                 st.audio(fp.name, format="audio/mp3")
 
-        except openai.error.RateLimitError:
+        except RateLimitError:
             st.error("⚠️ You are sending requests too quickly. Please wait a moment and try again.")
         except Exception as e:
             st.error(f"An unexpected error occurred: {e}")
