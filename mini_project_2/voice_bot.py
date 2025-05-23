@@ -1,62 +1,95 @@
 import streamlit as st
-from gtts import gTTS
-import speech_recognition as sr
-import os
-from pydub import AudioSegment
-from pydub.playback import play
+from streamlit_webrtc import webrtc_streamer, AudioProcessorBase
 import openai
+import numpy as np
+import wave
+import av
+import os
+from gtts import gTTS
+import tempfile
+import time
 
-# Optional: Set your OpenAI API key here
-openai.api_key = "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"  # Replace with your actual key
+# Set your OpenAI API key
+openai.api_key = st.secrets["OPENAI_API_KEY"]  # use Streamlit secrets for safety
 
-# Function to convert speech to text
-def transcribe_audio():
-    r = sr.Recognizer()
-    with sr.Microphone() as source:
-        st.info("🎙️ Listening... Please speak now.")
-        audio = r.listen(source)
-        try:
-            text = r.recognize_google(audio)
-            return text
-        except sr.UnknownValueError:
-            return "Sorry, I could not understand your voice."
-        except sr.RequestError:
-            return "API unavailable."
+# Title
+st.title("🎙️ AI Voice Bot using OpenAI + Streamlit")
 
-# Function to get GPT response
-def generate_response(prompt):
-    if openai.api_key:
-        try:
-            response = openai.ChatCompletion.create(
-                model="gpt-3.5-turbo",
-                messages=[{"role": "user", "content": prompt}]
-            )
-            return response.choices[0].message["content"]
-        except Exception as e:
-            return f"Error with OpenAI API: {e}"
-    else:
-        return "OpenAI API key not set. This is a sample response."
+# Save audio as WAV
+def save_audio_to_file(frames, sample_rate=16000, filename="audio.wav"):
+    wf = wave.open(filename, "wb")
+    wf.setnchannels(1)
+    wf.setsampwidth(2)
+    wf.setframerate(sample_rate)
+    wf.writeframes(b"".join(frames))
+    wf.close()
+    return filename
 
-# Function to convert text to speech and play it
+# Transcribe using OpenAI Whisper
+def transcribe_audio(file_path):
+    with open(file_path, "rb") as audio_file:
+        transcript = openai.Audio.transcribe("whisper-1", audio_file)
+        return transcript["text"]
+
+# Chat with GPT
+def chat_with_gpt(prompt):
+    chat = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You're a helpful AI voice assistant."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+    return chat.choices[0].message.content
+
+# Speak using gTTS
 def speak_text(text):
-    tts = gTTS(text)
-    tts.save("response.mp3")
-    audio = AudioSegment.from_mp3("response.mp3")
-    play(audio)
+    tts = gTTS(text=text, lang="en")
+    tmp_fp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+    tts.save(tmp_fp.name)
+    return tmp_fp.name
 
-# Streamlit UI
-st.set_page_config(page_title="AI Voice Bot", page_icon="🐰")
-st.title("AI Voice Bot")
+# Audio processor class for streamlit-webrtc
+class AudioProcessor(AudioProcessorBase):
+    def __init__(self) -> None:
+        self.frames = []
 
-st.markdown("""
-Speak into your mic. The bot will understand you, generate a response using AI, and reply with speech.
-""")
+    def recv(self, frame: av.AudioFrame) -> av.AudioFrame:
+        audio = frame.to_ndarray()
+        self.frames.append(frame.planes[0].to_bytes())
+        return frame
 
-if st.button("Speak Now"):
-    user_text = transcribe_audio()
-    st.success(f"You said: {user_text}")
+    def get_audio_data(self):
+        return self.frames
 
-    response = generate_response(user_text)
-    st.info(f"Bot: {response}")
+# WebRTC Stream
+ctx = webrtc_streamer(
+    key="send-audio",
+    mode="sendonly",
+    audio_receiver_size=1024,
+    audio_frame_callback=None,
+    media_stream_constraints={"audio": True, "video": False},
+    async_processing=True
+)
 
-    speak_text(response)
+# Start button to process
+if ctx.audio_receiver:
+    if st.button("🎤 Transcribe and Chat"):
+        audio_processor = ctx.audio_processor
+        if audio_processor:
+            with st.spinner("Processing audio..."):
+                audio_data = audio_processor.get_audio_data()
+                audio_file_path = save_audio_to_file(audio_data)
+
+                # Transcribe
+                transcript = transcribe_audio(audio_file_path)
+                st.success(f"📝 You said: {transcript}")
+
+                # Chat response
+                reply = chat_with_gpt(transcript)
+                st.info(f"🤖 Bot says: {reply}")
+
+                # TTS
+                speech_fp = speak_text(reply)
+                audio_bytes = open(speech_fp, "rb").read()
+                st.audio(audio_bytes, format="audio/mp3")
