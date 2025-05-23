@@ -10,7 +10,8 @@ import tempfile
 import time
 
 # Set your OpenAI API key
-openai.api_key = st.secrets["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"]  # use Streamlit secrets for safety
+# secrets.toml contains OPENAI_API_KEY = "sk-..." 
+openai.api_key = st.secrets["OPENAI_API_KEY"]  # use Streamlit secrets for safety
 
 # Title
 st.title("🎙️ AI Voice Bot using OpenAI + Streamlit")
